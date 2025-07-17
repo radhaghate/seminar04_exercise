@@ -43,14 +43,15 @@ package_check(required_packages)
 
 ```{r setup_reticulate}
 # set up reticulate
-use_python("/Library/Frameworks/Python.framework/Versions/3.13/bin/python3", required = TRUE) # change this path to your python installation
+#library(reticulate) do we need this?
+use_python("/opt/miniconda3/envs/quarto-python/bin/python", required = TRUE) # change this path to your python installation
 ```
 
 
 ```{bash install_py_modules, eval=FALSE}
 # macOS
 pip install --user statsmodels scikit-learn
-
+#/opt/miniconda3/envs/quarto-python/bin/pip install statsmodels scikit-learn
 # or
 
 # windows
@@ -82,6 +83,7 @@ Use the `head()`, `summary()`, and `glimpse()` functions to explore the dataset.
 
 ```{r mtcars_explore}
 # your code goes here
+
 ```
 
 
@@ -138,8 +140,8 @@ car_model
 Use the `geom_abline()` function to add our estimated regression line and the intercept to the plot. Don't hard-code the slope and intercept, but extract them from the model using `coef()` and appropriate indexing.
 
 ```{r}
-car_slope <- coef(______)_______
-car_intercept <- coef(______)_______
+car_slope <- coef(car_model)[["wt"]]
+car_intercept <- coef(car_model)[["(Intercept)"]]
 
 scatterplot +
     geom_smooth(method = "lm", se = FALSE, color = "blue", fullrange = T) +
