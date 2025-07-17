@@ -1,0 +1,842 @@
+---
+title: "Seminar 4: Linear Regression"
+subtitle: "LSE ME314: Introduction to Data Science and Machine Learning"
+date-modified: "15 July 2025" 
+toc: true
+format: html
+execute:
+  echo: true
+  eval: false
+---
+
+## Plan for Today
+
+- Learn how to estimate bivariate and multivariate regressions
+- Learn how to obtain and interpret coefficients and inferential statistics
+- Learn how to make predictions based on a linear model
+- Learn how to obtain model diagnostics and how to interpret them
+- Learn how to output nicely formatted regression tables
+
+```{r setup_r,message=FALSE,warning=FALSE}
+
+# load packages
+package_check <- function(need = c()) {
+    have <- need %in% rownames(installed.packages()) # checks packages you have
+    if (any(!have)) install.packages(need[!have]) # install missing packages
+    invisible(lapply(need, library, character.only = T))
+}
+
+required_packages <- c(
+    "dplyr", # for data management
+    "broom", # for tidying model outputs
+    "estimatr", # for regression with robust standard errors
+    "modelsummary", # for prettier model output tables
+    "ggplot2", # for plotting
+    "tidyr", # for data transformation
+    "tibble", # for plotting,
+    "reticulate" # for working with python in quarto
+) 
+
+package_check(required_packages)
+```
+
+
+```{r setup_reticulate}
+# set up reticulate
+use_python("/Library/Frameworks/Python.framework/Versions/3.13/bin/python3", required = TRUE) # change this path to your python installation
+```
+
+
+```{bash install_py_modules, eval=FALSE}
+# macOS
+pip install --user statsmodels scikit-learn
+
+# or
+
+# windows
+python -m pip install statsmodels scikit-learn
+```
+
+
+```{python setup_python, warning=FALSE, message=FALSE}
+# Import libraries and load data
+import pandas as pd
+import numpy as np
+import statsmodels.formula.api as smf
+from sklearn.linear_model import LinearRegression
+```
+
+
+# Part 1: Bivariate Regression
+
+When working with R, there are a bunch of pre-installed datasets that are easily accessible. You will find that they are often used in examples and exercises online, in class, or in the documentation of R packages. One of the most commonly used datasets is called `mtcars` , which contains information about various car models and their specifications (based on reports in a 1974 US magazine). To see information about the variables of pre-installed datasets, you can use the `?` operator.
+
+```{r, eval=FALSE}
+?mtcars
+```
+
+
+We will use this dataset to estimate the association between the weight of a car (`wt`) and its miles per gallon (`mpg`). Before estimating the model, let's get a better understanding of the data. 
+
+Use the `head()`, `summary()`, and `glimpse()` functions to explore the dataset.
+
+```{r mtcars_explore}
+# your code goes here
+```
+
+
+We can also visualise the relationship between the two variables using a scatter plot. This will help us understand the nature of the relationship before we fit a linear regression model. 
+
+Create a scatterplot with `wt` on the x-axis and `mpg` on the y-axis. Use the `ggplot2` package to create the plot and assign it to an object called `scatterplot`.
+
+```{r mtcars_plot}
+# your code goes here
+```
+
+::: {.callout-info}
+If you are unsatisfied with how the plot is rendered (e.g. elements too small) you can install the `httpgd` package, which displays the plots much better. This is optional and if your plots are clearly displayed, just stick to the default and don't execute the code below.
+
+```{r httpgd, eval=FALSE}
+remotes::install_github("nx10/httpgd")
+```
+
+Then, navigate to the VSCode setting (Cmd + ,) and search for "httpgd". Check the box for the "Use Httpgd" setting. Then restart VScode.
+:::
+
+
+Ok, we can see that there is a negative relationship between car weight and miles per gallon. Just from looking at the scatterplot, what do you think are appropriate values for the intercept and the slope of the regression line? Try out a few variables and add them to the scatterplot by changing respective values the `geom_abline()` function below. 
+
+Let's add a straight line of best fit to the plot to make it even clearer.
+
+```{r}
+scatterplot_guess <- scatterplot+
+    geom_abline(intercept = ___, slope = ____, color = "red", linewidth = 1) 
+
+scatterplot_guess
+```
+
+Once you are happy with your guess, let's see well you did! Use the `geom_smooth()` function to add a straight regression line to the plot. 
+
+```{r}
+scatterplot_guess + 
+    geom_smooth(method = "lm", formula = y ~ x, se = FALSE, color = "blue")
+```
+
+Under the hood, the `geom_smooth()` function estimates a model and then uses its result to fit the a line to the data. `method = "lm"` means that the function estimates a "**l**inear **m**odel," which is what we are now going to do manually.
+
+## Estimation
+
+The R command to estimate a linear regression model is `lm()`. To fit a regression, you specify a *formula* that describes the relationship between the dependent and the independent variable like this:
+
+`y ~ x`
+
+The variable names must correspond to column names in a dataframe that you specify in the `data` argument.
+
+```{r estimate_ols}
+car_model <- lm(formula = ______, data = mtcars)
+car_model
+```
+
+
+**Questions:**
+
+- Based on our model, what is the expected value of Y at x = 0?
+- Based on our model, what is the expected change in Y for a one unit increase in X?
+
+
+
+Use the `geom_abline()` function to add our estimated regression line and the intercept to the plot. Don't hard-code the slope and intercept, but extract them from the model using `coef()` and appropriate indexing.
+
+```{r}
+car_slope <- coef(______)_______
+car_intercept <- coef(______)_______
+
+scatterplot +
+    geom_smooth(method = "lm", se = FALSE, color = "blue", fullrange = T) +
+    geom_abline(
+        slope = car_slope, intercept = car_intercept,
+        color = "red", linewidth = 1
+    ) +
+    annotate("point", x = ______, y = _________, color = "black", size = 8, shape = 18) 
+```
+
+
+As you can see, the two lines are identical and the intercept is simply the point on the regression line where X is zero.
+
+**Questions:**
+
+1.   Think a moment about the interpretation of the intercept. Is it meaningful?
+2.   Think a moment about the functional form of the relationship. Do you think it is specified correctly? Is `mpg` a linear function of weight and a normally distributed error term with a mean of 0?
+
+
+
+## Prediction
+
+Let's put our model to use! Below, you see a picture of the ZIL-41047, the Soviet state car that was used by Mikhail Gorbachev. It is quite heavy (around 7000 pounds)! Lets use the linear model to predict how many miles this gargantuan car can drive on one gallon of gas.
+
+![Gorbachev's 700 lbs Limousine](figs/gorbi_car.jpg){fig-align="center" width="400"}
+
+You can predict values of Y on the regression line by hand or through the `predict()` function. 
+
+```{r}
+coef(car_model)[["(Intercept)"]] + 7 * coef(car_model)[["wt"]]
+# Alternatively (and in more complex cases) you can use the `predict()` function:
+predict(car_model, newdata = data.frame(wt = 7))
+```
+
+
+The first method is useful for understanding the mechanics of regression, while the second is more practical for larger datasets or more complex models. Note that both methods simply solve the following equation:
+
+$$
+\hat{y} =\beta_0 + \beta_1 \times 7
+$$
+
+
+**Questions:**
+
+1.   What does our model predict? How many miles could Gorbachev travel on one gallon?
+2.   What do you make of the negative prediction? Why is it implausible?
+
+In case you were wondering, the lightest car ever produced is the *Peel P50*, a tiny car manufactured on the *Isle of Man* in the sixties. It was small enough to be stored in a van.
+
+::: {.columns}
+::: {.column width="50%"}
+![The Peel P50...](figs/P50_1.jpg){height=150px}
+:::
+::: {.column width="50%"}
+![... neatly fits into another car](figs/P50_2.jpg){height=150px}
+:::
+:::
+
+The original car weighs only 130 pounds! Predict its `mpg` using our model and the `predict()` function.
+
+```{r}
+# Your code goes here
+```
+
+## Functional Form
+The predictions for extreme cars were not very good. Are we getting the functional form wrong? Recall that we already saw that even within our sample, we are getting larger residuals at the extremes.
+
+Adapt the `formula` argument in `geom_smooth()` to plot models that include additional polynomials of `wt` as predictors. When transforming a variable in a formula, wrap your transformation in `I()`. For example, to use the square of `wt` as a predictor, write `I(wt^2)`.
+```{r}
+scatterplot +
+    geom_smooth(
+        method = "lm",
+        formula = y ~ x,
+        se = FALSE, color = "blue"
+    ) + # leave this as reference
+    geom_smooth(
+        method = "lm",
+        formula = y ~ x + ___________, # adapt the functional form 
+        se = FALSE, color = "red"
+    ) 
+```
+
+
+Based on the visualisation AND your knowledge about the data generating process, select one of the models you plotted and estimate it using the `lm()` function. Then, use the `predict()` function to predict the `mpg` of the Peel P50 and Gorbachev's limousine. Does your model do a better job than `car_model`? The true `mpg` of the Peel P50 is 83, while Gorbachev's limousine has a true `mpg` of 8.5.
+
+```{r}
+# estimate the model
+car_model_poly <- __________
+
+# generate a prediction dataset with the values we want to predict and the true values of Y.
+newdata_cars <- data.frame(
+    wt = c(7, .13),
+    mpg = c(8.5, 83)
+)
+
+# by assigning row names, the prediction output will be easier to read
+rownames(newdata_cars) <- c("ZIL-41047", "P50")
+
+# predict the values 
+prediction_poly <- ____________________
+
+# add the predictions as a column called `mpg_hat` in the newdata_cars dataframe
+____________ <- ______________________
+
+# inspect the result
+newdata_cars
+```
+
+
+If you have the time, add the line predicted by car_model_poly, your predictions for P50 and ZIL-41047 and the true values to the scatterplot.  
+```{r}
+# your code goes here
+```
+
+
+## Inference
+
+The output we obtained from the regression model above was a bit underwhelming. To see more information about the model, we can use the `summary()` function:
+
+```{r}
+# your code goes here
+```
+
+
+Now this is far more informative! There are some summary stats about the distribution of the residuals, and a coefficient block with  estimates, standard errors, t-values, and  p-values.
+
+We interpreted the coefficients above already, let's now focus on statistical significance. R has computed a number of statistics for us, if you want to learn more about how they are related and calculated manually, check out the [Bonus section](#sec-inference) at home.
+
+Standard Errors
+
+:  Let's begin with the standard error. In asymptotic statistics, the standard error of a coefficient is the estimated standard deviation of the sampling distribution of the coefficient. In other words, it tells us how much the coefficient would vary on average if we were to repeatedly sample from the population and estimate the model. So when the standard error is small, it means that the coefficient is estimated with high precision, and vice versa.
+
+The standard error of `wt` is 0.56. This means that if we were to repeatedly sample from the population and estimate the model, we would expect the coefficient of `wt` to vary by about $\pm 0.56$ on average. While we might obtain a few coefficient estimates that are very different from the one we got, most of them will be close to the estimate we found.
+
+T-statistic
+
+:  While the SE is usually the cornerstone of inference, it is on the scale of X and not as easily interpretable. People are therefore often more interested in the p-value. We can obtain the p-value by first estimating the t-statistic, which is simply the coefficient divided by its standard error: $\frac{-5.3445}{0.56} \approx -9.54$. The t-statistic is essentially the number of standard errors, the coefficient is away from zero. We know the properties of the t-distribution, so given the t-statistic (and the degrees of freedom of our model), we can look up the corresponding p-value. The t-statistic is not usually interpreted in isolation, but mainly used to calculate the p-value.
+
+P-values
+
+:  The most common statistic used to assess significance is the p-value. It tells us the probability of observing a t-statistic as extreme as the one we found, given that the null hypothesis is true. So if the p-value is 0.01, there is a 1% probability of being unlucky and observing a value as extreme as the one we found even though the true coefficient is actually zero.
+
+Imagine the following scenario: you have a population from which you draw a random sample. You estimate the coefficient and obtain a p-value of 0.01. If you were to repeat this process another 99 times, you would expect to find one instance where the coefficient is significant at the 0.01 level by chance alone, even if the true coefficient is actually zero. Obviousely, it is usually impossible to repeat the sampling process, but if you obtained a p-value of 0.01, you know that either the true coefficient is not zero or you drew a very unlikely sample.
+
+Our p-value is 1.29e-10, which is scientific notation for 0.000000000129. So either the null hypothesis is false, or we drew a $\frac{1}{7,751,937,984} = 1.29e^{-10}$ sample -- which seems rather unlikely.
+
+It is very common to set a significance level $\alpha$ a priori and then reject the null hypothesis if the p-value is below that level. The most common significance levels are 0.05, 0.01, and 0.001 and whether a coefficient is significant at a certain level is often indicated by stars in the output. Note that these levels are completely arbitrary. It is generally a good idea not to get overly fixated on p-values and significance, and to focus on design choices and substantive interpretation first!
+
+Confidence Intervals
+
+:  Finally, while the `summary()` output does not show it, we can also obtain confidence intervals for the coefficients:
+
+```{r ci_95}
+confint(car_model, level = 0.95)
+```
+
+
+We calculated 95% confidence intervals using the `confint()` function. They are interpreted as follows: If we were to repeat the sampling process (and estimation) an infinite number of times, 95% of the confidence intervals obtained would contain the true coefficient. You can estimate confidence intervals for any level. Naturally, the higher the confidence level, the wider the interval.
+
+Estimate confidence intervals that -- on expectation --  contain the true coefficient in 99.9% of the hypothetical resamples. Then, estimate confidence intervals that **always** contain the true coefficient. What do you expect them to look like?
+
+```{r }
+# Your code goes here
+```
+
+
+
+# Part 2: Multivariate Regression
+
+We use the same function (`lm()`) for multivariate regression that we used for bivariate regression. All we have to change is the formula. To estimate the relationship between $Y$ and several predictors $X1$, $X2$ and $X3$, simply write:
+
+`lm(y ~ x1 + x2 + x3, data = dataframe)`
+
+Let's move to a more interesting dataset for multivariate regression. Load the `ESS9_immatt.rds` dataset and assign it to an object called `ess_data`. Take a look at the variables it contains.
+
+```{r}
+# Your code goes here
+```
+
+
+The data are for *n*=33706 respondents in the European Social Survey (ESS) in 2018. The response variable in the dataset is
+
+-   `immatt`: a measure of respondent’s attitude to immigration, with higher values indicating more positive attitudes
+
+Suppose that our research question is one of descriptive association: How are attitudes to immigration of the individuals in these data \[and in the population they represent\] associated with some characteristics of the individuals? We consider two independent variables:
+
+-   `educ`: respondent's education, in years of school completed
+-   `hhnetinc`: respondent's household’s equivalised total net income, coded as the decile in the distribution of this income within the respondent's country (1=lowest 10%, 2=second 10%, ..., 10=highest 10%)
+
+Let's first summarise the relevant variables to get a better understanding of the data. Subset the data to only include the variables of interest and then inspect the dataset distribution of the variables.
+
+```{r summarise_ess}
+# Your code goes here
+```
+
+
+Estimate a bivariate regression model with `immatt` as the dependent variable and `hhnetinc` as the independent variable and then a multivariate model with `hhnetinc` and `educ` as independent variables.
+
+```{r multivariate_regression}
+# your code goes here
+```
+
+
+
+**Questions:**
+
+1.  What is the substantive interpretation of the Intercept?
+2.  Why does the intercept change from the bivariate to the multivariate model?
+3.  What is the interpretation of the coefficient for `hhnetinc` in each of the models?
+4.  Interpret the p-value of the coefficient for `educ` in the multivariate model.
+5.  Why is the coefficient for `hhnetinc` in the multivariate model smaller than in the bivariate model?
+
+
+Now, use the `predict()` function to predict immigration attitudes for three respondents with the following properties:
+
+1.  income in 7th decile, 15 years of education
+2.  income in 10th decile, 2 years of education
+3.  income in 7th decile, 22 years of education
+
+```{r predict_multivariate}
+# your code goes here
+```
+
+**Question:**
+
+How do the predictions compare? Do you find all predictions similarly informative? Why/why not?
+
+
+# Part 3: Diagnostics and Residuals
+
+While we can fit regression lines to virtually all data, whether our point estimates and (especially) the inferential statistics are what we think they are, depends on several assumptions. Both theoretical considerations and empirical tests can help establish whether these assumptions are met or violated.
+
+To recap the assumptions of linear regression:
+
+1.  Linearity: The relationship between the independent and dependent variables is linear (possibly after variable transformation). In other words: the relationship between the dependent variable and the independent variables is correctly specified.
+2.  Homoscedasticity/No heteroscedasticity: The variance of the residuals is constant across all levels of the independent variable.
+3.  Normality: The residuals are normally distributed.
+4.  Independence: The observations are independent of each other.
+
+By inspecting the residuals, we can learn something about assumptions 1, 2, and 3. You can access the residuals of a model using the `residuals()` function. Let's visualise the residuals of our previous `car_model` in the scatter plot we created earlier.
+
+```{r residuals}
+# get residuals
+car_residuals <- residuals(car_model)
+
+# save residuals, real values, and predicted values in a dataframe
+residual_df <- data.frame(
+    wt = mtcars$wt, 
+    mpg = mtcars$mpg,
+    residuals = car_residuals,
+    predicted = predict(car_model)
+)
+
+scatterplot+
+    geom_linerange(data = residual_df, aes(x = wt, ymin = predicted, ymax = predicted + residuals), 
+                   color = "red", alpha = 0.5, linetype = 2) +
+    geom_abline(slope = -5.344, intercept = 37.285, 
+                color = "red", linewidth = 1)
+```
+
+
+One straightforward diagnostic is plotting the residuals against X (or `wt` in our case). That way, we can see whether the variance is constant across X (homoscedastic) and whether there is any pattern in the residuals that would suggest that we misspecified the relationship between X and Y. Use the {ggplot2} package and the `residual_df` dataframe to do that.
+
+
+```{r residuals_vs_wt}
+# your code goes here
+```
+
+
+The variance in the residuals does not seem to depend on X, but there seems to be a U-shaped relationship between `wt` and the residuals. This suggests that the relationship may not be linear. Let's investigate this further.
+
+R provides some default diagnostic plots that can help us check the assumptions of the regression model. You can use the `plot()` function on a model object to generate these plots.
+
+```{r diagnostic_plots}
+# diagnostic plots
+par(mfrow = c(2, 2)) # set up a 2x2 plotting area
+plot(car_model)
+par(mfrow = c(1, 1)) # reset to single plot     
+```
+
+
+Let's walk through the four plots (you can find more information by typing `?plot.lm()` in the console):
+
+1.  **Residuals vs. Fitted**: This plot helps us detect non-linearity. It is very similar to the plot we just created, but it plots the residuals against the fitted values, not X. That way, the plot can be created for bivariate and multi-variate models. We want to watch out for patterns in the red line, as they would suggest that the accuracy of our predictions changes by the independent variable(s). We can see a slight U shape in the relationship. This indicates that our residuals are larger (meaning that predictions are less accurate) for very light and very heavy cars.
+
+2.  **Q-Q Residuals**: This plot helps us assess the normality of the residuals. It relates the standardised residuals to the theoretical quantiles of a normal distribution. If the residuals follow a normal distribution, their standardised values and the theoretical quantiles should fall approximately along the reference line. Our residuals fit the theoretical line quite well.
+
+3.  **Scale-Location**: This plot helps us check for homoscedasticity. It shows the square root of the standardised absolute residuals against the fitted values. We want to see a horizontal line with equally spread points. If the points fan out or form a pattern, it suggests heteroscedasticity. In our case, the points are fairly evenly distributed around the horizontal line, indicating that the variance of the residuals is constant across all levels of the independent variable.
+
+4.  **Residuals vs. Leverage**: This plot helps in identifying influential outliers. The x-axis maps each point's *leverage*, a measure of how strongly each value influences the overall result. On the y-axis, you see the standardised residuals once more. Watch out for points with high leverage and big residuals (both positive and negative). The model might not be robust to removing these outliers and coefficients may be mainly driven by some, perhaps odd or false, measurements.
+
+# Part 4: Controlling for as Partialling-Out
+While you will usually compute multivariate regressions like we did above, we could also estimate the relationship between `hhnetinc` and `immatt` controlling for `educ` by first eliminating the variance due to `educ` in both our dependent and independent variable. We can do this by estimating two bivariate regressions (with our dependent and independent variables of interest as dependent variables and the variable whose influence we want to remove as predictor) and then use the residuals from these models in a new regression. This is called *partialling out*. Try it out below.
+
+```{r partialling_out}
+# obtain residuals from bivariate regression of immat on educ
+immatt_residuals <- resid(lm(_______ ~ _______, data = ess_data))
+
+# obtain residuals from bivariate regression of hhnetinc on educ
+hhnetinc_residuals <- resid(lm(_______ ~ _______, data = ess_data))
+
+# estimate relationship between residuals
+summary(immat_model_po <- lm(_______ ~ _______, data = ess_data))
+
+```
+
+
+Lets compare this model with the bivariate and multivariate models we estimated above. A neat way to do this is to use the `modelsummary` package, which creates nice tables with the results of several models, one in each column.
+
+```{r}
+modelsummary::modelsummary(
+    list(bivariate = immatt_model_biv, multivariate = immatt_model_multi, multivariate_partialing_out = immat_model_po),
+    coef_rename = c(
+        "hhnetinc" = "Household income (decile)",
+        "educ" = "Education (years)",
+        "hhnetinc_residuals" = "Household income (decile, residuals)"
+    ),
+    stars = T,
+    statistic = c("SE: {std.error}", "t: {statistic}", "p: {p.value}"),
+    output = "html",
+    gof_map = c(
+        "nobs",
+        "r.squared"
+    ),
+    title = "Regression Results: Immigration Attitudes"
+)
+```
+
+# Part 5: Regression using Python
+Python has a range of packages for regression analysis. For today, we will use the formula API of the {statsmodels} package, which allows us to use R-style formulas to specify our models.
+
+```{python}
+# Load mtcars dataset from R environment
+mtcars = r.mtcars # this is reticulate magic, converting an R object to a Python object
+
+# Fit regression using R-style formula
+model = smf.ols('mpg ~ wt', data=mtcars).fit()
+print(model.params)
+print(model.summary())
+
+# Extract coefficients 
+print(f"\nIntercept: {model.params['Intercept']:.3f}")
+print(f"Weight: {model.params['wt']:.3f}")
+
+# Make predictions
+new_data = pd.DataFrame({'wt': [7, 0.13]})  # Gorbachev's limo & Peel P50
+predictions = model.predict(new_data)
+
+print(predictions.iloc[0])
+predictions[0]
+predictions[1]
+```
+
+
+Extend the code above to estimate a multivariate regression, output the coefficients, and a summary of the model. 
+
+```{python}
+# Your code goes here
+```
+
+
+# BONUS: Calculating Inferential Statistics Yourself  {#sec-inference}
+
+## Asymptotic Inference 
+
+R calculates a range of inferential statistics for us, including the standard error, t-value, and p-value. However, it is useful to understand how these statistics are calculated and related and how you could calculate them yourself.
+
+Usually, the most fundamental statistic we are interested in is the standard error of the coefficient. In the bivariate case, the standard error of the coefficient ($\hat{se}(\hat{\beta})$) is given by:
+
+$$
+\begin{align}
+\hat{\text{se}}(\hat{\beta}) =& \frac{\hat\sigma}{\sqrt{\sum(X_i - \bar{X})^2}}\\
+=&\frac{\hat\sigma}{s_{x}\sqrt{n-1}}
+\end{align}
+$$
+
+
+where
+
+$\sigma^2$ is the residual standard deviation, $\bar{X}$ is the mean of $X$, $s_x$ is the standard deviation of $X$ and $n$ is the number of observations.
+
+We can do this by hand (this only works for bivariate regression but other formulas exist for the multivariate case):
+
+```{r}
+# extract residual standard error
+sigma_hat <- summary(car_model)$sigma
+
+
+car_model_wt_se <- sigma_hat / (sqrt(sum((mtcars$wt - mean(mtcars$wt))^2)))
+car_model_wt_se
+
+# This formula yields the same result
+sigma_hat / (sd(mtcars$wt) * sqrt(length(mtcars$wt) - 1))
+```
+
+
+This is a nice formula, but what is the standard error trying to capture? The standard error estimates the standard deviation of the sampling distribution - that is, how much our coefficient would vary across many hypothetical samples from the same population.
+
+While we can't actually repeat our study infinitely, we can demonstrate this concept through simulation. The code below simulates a large population, draws one random sample, and estimates the mean and its standard error (the same principle applies to any regression coefficient).
+
+We then draw many samples and calculate the mean for each. The standard deviation of these sample means should match our estimated standard error - let's see if it does:
+
+```{r se_asymptotic}
+set.seed(1111)
+
+# simulate a population with a mean value of 2
+population <- rnorm(10000, mean = 2)
+
+# the researcher draws a random sample of 100 observations and estimates the mean and standard error
+researcher_sample <- sample(population, 100)
+researcher_model <- lm(researcher_sample ~ 1) # fancy way to estimate the mean
+researcher_se <- summary(researcher_model)$coefficients[1, "Std. Error"]
+
+# Luckily, we are for once not limited to one sample.  We can draw many samples from the population and estimate the mean for each sample. Because of asymptotic statistics, the standard deviation of all these samples should be close to the standard error we estimated above.
+
+N  <-  1000 # number of resamples
+resampled_means <- replicate(N, {
+    sample <- sample(population, 100)
+    mean <- mean(sample)
+})
+
+
+ggplot() +
+    geom_density(aes(resampled_means), fill = "grey") +
+    annotate("errorbarh",
+        xmin = mean(resampled_means) - 0.5 * sd(resampled_means),
+        xmax = mean(resampled_means) + 0.5 * sd(resampled_means),
+        height = 0.1,
+        y = 4
+    ) +
+    annotate("text",
+        x = mean(resampled_means), y = 4,
+        label = paste("Standard Deviation of\nthe Sampling Distribution"),
+        vjust = -1
+    ) +
+    annotate("segment",
+        x = mean(resampled_means), y = 0, yend = 4,
+        linetype = 2) +
+        annotate("text",
+        x = mean(resampled_means), y = 2, yend = 4,
+        linetype = 2, label = "Mean of Means", angle = -90,
+        vjust = -1) +
+    coord_cartesian(ylim = c(0, 5))  
+
+sd_of_resampled_means <- sd(resampled_means)
+
+print(paste0("Estimated SE from one sample: ", round(sd_of_resampled_means, 5)))
+print(paste0("Estimated SE from ", N, " resamples: ", round(researcher_se, 5)))
+
+```
+
+
+Once we have the standard error, we can obtain all other inferential statistics. The t-value is simply the coefficient divided by its standard error:
+
+```{r}
+car_model_wt_t  <- car_model$coefficients["wt"]/car_model_wt_se
+```
+
+
+And the p-value can be obtained once we know the t-value:
+
+```{r}
+2 * pt(-abs(car_model_wt_t), df = car_model$df.residual)
+```
+
+
+To get a better understanding of what the code above does, lets look at the probability density function of a t-distribution for 30 degrees of freedom (in the range from -15 tp 15).[^1]
+
+[^1]: In regression, the degrees of freedom are equal to the number of observations minus the number of coefficients estimated. In our case, we have 32 observations and estimate 2 coefficients (intercept and slope), so we have 30 degrees of freedom. 
+
+```{r}
+seq <- seq(-15, 15, .1)
+t_dist <- dt(seq, df = car_model$df.residual)
+
+t_plot <- ggplot(data.frame(seq, t_dist), aes(seq, t_dist)) +
+    geom_line() +
+    labs(
+        x = "t-values",
+        y = "Probability"
+    )
+
+```
+
+
+Now, lets place the t-value we found on that distribution. With the `-abs` part, we make sure that we locate it on the left tail.
+
+```{r}
+t_plot +
+    geom_vline(aes(xintercept = -abs(car_model_wt_t)), linetype = 2, color = "red")
+
+```
+
+
+Recall, we want to estimate the probability of drawing a value as extreme (or even more extreme) than the one we obtained if the true value would be zero. That probability is the area under the curve left to the t-value we found.
+
+```{r}
+if (!requireNamespace("ggmagnify", quietly = TRUE)) {
+    remotes::install_github("hughjonesd/ggmagnify")
+}
+library(ggmagnify)
+
+t_plot +
+    geom_vline(aes(xintercept = -abs(car_model_wt_t)), linetype = 2, color = "red") +
+    geom_area(aes(seq, t_dist, fill = seq <= -abs(car_model_wt_t))) +
+    theme(legend.position = "none")+
+    ggmagnify::geom_magnify(
+        from = c(xmin = -15, xmax = -9, ymin = 0, ymax = .0000000002),
+        to = c(5, 15, .1, .3)
+    )
+
+t_plot
+```
+
+
+In case you were wondering why we had to make sure the t-value was negative: we could also have made sure that it was positive and then taken the area under the curve right to our calculated t-value. It makes no difference for the two-tailed test we are condcuting. We simply have to know the sign of our t-value in order to obtain the correct cumulative probability.
+
+```{r}
+# use R to obtain the cumulative probability (the green area under the curve) with the following code:
+pt(-abs(car_model_wt_t), df = car_model$df.residual)
+```
+
+
+Finally, because we are conducting a two-tailed test, we multiply the value by 2. That way, we get the probability of finding a t-value as large as ours if the true value is 0, irrespective of our value being positive or negative. This is also why the `summary()` output reports the p-value as `Pr(>|t|)`, which means "probability of finding a t-value as large or larger than the *absolute* value of the t-value we found if this is a draw from a t-distribution with a true mean of 0."
+
+```{r}
+2*pt(-abs(car_model_wt_t), df = car_model$df.residual)
+# compare this to the p-value we found in the summary output
+summary(car_model)$coefficients["wt", "Pr(>|t|)"]
+```
+
+
+There is also a goodness-of-fit block at the bottom of the output where you can see the residual standard error, the degrees of freedom, (adjusted) $R^2$, the F-statistic and its p-value. The F-statistic helps us determine how much better our model fits the data in comparison to a model with just the intercept (which is equivalent to predicting for each $i$ that $Y$ is simply $\mathbb{E}[Y]$). The tiny p-value indicates that a model with `wt` is a significantly better fit than such an intercept-only model.
+
+## Robust & Bootstrapped Standard Errors 
+
+More frequently than not, some of the assumptions of linear regression are violated. Very commonly, the homoscedasticity assumption is violated. While we can still estimate informative coefficients, heteroscedasticity means that our asymptotic standard errors are biased. With heteroscedasticity, we often overestimate how precise our estimates are. 
+
+Luckily, that does not mean that we have to give up on ols or inference in such cases. There are two common approaches to deal with heteroscedasticity: robust standard errors and bootstrapped standard errors. The simulations below demonstrates that these approaches are robust to heteroscedasticity, while the asymptotic standard errors are not.
+
+The simulation follows these steps:
+
+1. Simulate a DGP in which one variable is correlated with the dependent variable and another variable is correlated with the variance of the error term, but not with the dependent variable.
+2. Estimate a model with the dependent variable and the two independent variables.
+3. Calculate the p-value for the uncorrelated independent variable using three different approaches.
+4. Repeat the process 1000 times and calculate the share of significant results for each approach.
+
+You can inspect the code to familiarise yourself with bootstrapping and robust standard errors. Note that most of the time, you should simply use robust standard errors as a default by using the `estimatr::lm_robust()` function instead of `lm()`. This will automatically calculate robust standard errors for you.  
+
+```{r se_simulation_fns}
+# First, we define a function that simulates a simple DGP
+
+simulate_data <- function(N = 1000, hc = TRUE) {
+    X <- rnorm(N, 0, 1)
+    X2 <- runif(N, 0, 5)
+
+    if (hc) {
+        # simulate heteroscedasticity by making the error term depend on X2
+        U <- rnorm(N, 0, X2 * 10)
+    } else {
+        # The function has an option to simulate data without 
+        # heteroscedasticity, so we can compare the performance 
+        # of different SE estimation methods on data with 
+        # and without heteroscedasticity.
+
+        # simulate data without heteroscedasticity
+        U <- rnorm(N, 0, 1)
+    }
+
+    # simulate the dependent variable Y as a function of a constant, X, U and NOT X2
+    Y <- 2 + 20 * X + U
+
+    df <- dplyr::tibble(
+        X = X,
+        X2 = X2,
+        Y = Y
+    )
+    return(df)
+}
+
+# define function that estimates bootstrapped standard errors. 
+
+# Usually, you would use a package like {rboot} for this, but below you can see what happens under the hood.
+
+bootstrap <- function(model, n_boot = 50) {
+    # retrieve the data from our model
+    data <- model$model
+
+    # retrieve the formula we used to estimate the model
+    formula <- model$call$formula
+
+    # and the number of observations
+    n <- nrow(data)
+
+    # initialise an empty matrix in which we can store our simulated coefficients
+    boot_coefs <- matrix(NA, n_boot, length(coef(model))) 
+
+    for (i in 1:n_boot) {
+
+        # sample with replacement from the data
+        shuffled_data <- data[sample(1:n, n, replace = TRUE), ]
+
+        # Estimate the model on the bootstrapped sample and extract coefficients
+        boot_coefs[i, ] <- coef(lm(formula, data = shuffled_data))
+    }
+
+    # estimate the standard deviation of the coefficient distributions
+    boot_se <- apply(boot_coefs, 2, sd)
+
+    # calculate t-statistics and p-values
+    t_value <- coef(model) / boot_se
+    p_value <- 2 * pnorm(-abs(t_value))
+
+    # return output as dataframe
+    return(
+        data.frame(
+            estimate = coef(model),
+            std.error = boot_se,
+            statistic = t_value,
+            p.value = p_value
+        )
+    )
+}
+
+# function that calls the above functions once to simulate data, calculate the statistics, and test whether they are significant.
+test_sig <- function(N = 1000, hc, n_boot = 100) {
+    df <- simulate_data(N, hc)
+
+    model <- lm(Y ~ X + X2, data = df)
+    model_robust <- estimatr::lm_robust(Y ~ X + X2, data = df)
+
+    # extract the p-values calculated with ordinary, bootstrapped, 
+    # and robust standard errors
+    p_simple <- summary(model)$coefficients["X2", "Pr(>|t|)"]
+    p_bootstrap <- bootstrap(model, n_boot = n_boot)["X2", "p.value"]
+    p_robust <- model_robust$p.value["X2"]
+
+    # return 1 if p-value is significant at 0.05, 0 otherwise
+    p_simple_sig <- as.numeric(p_simple < 0.05)
+    p_bootstrap_sig <- as.numeric(p_bootstrap < 0.05)
+    p_robust_sig <- as.numeric(p_robust < 0.05)
+
+    return(list(
+        p_simple_sig = p_simple_sig,
+        p_bootstrap_sig = p_bootstrap_sig,
+        p_robust_sig = p_robust_sig
+    ))
+}
+```
+
+::: callout-warning
+## Warning
+The code below will take a while to run. You can use the `eval=FALSE` option if you don't want to execute it when you knit your quarto document.
+:::
+
+```{r simulate, eval=F}
+# run 1000 simulations without heteroscedasticity
+set.seed(123)
+simulation_results_nohc <- sapply(1:500, function(i) {
+    test_sig(N = 1000, hc = F, n_boot = 99)
+})
+
+# run 1000 simulations with heteroscedasticity
+set.seed(123)
+simulation_results_hc <- sapply(1:500, function(i) {
+    test_sig(N = 1000, hc = T, n_boot = 99) 
+})
+
+```
+
+Finally, let's calculate share of significant results.
+
+```{r, eval=F}
+apply(simulation_results_nohc, 1, function(x) mean(as.numeric(x)))
+apply(simulation_results_hc, 1, function(x) mean(as.numeric(x)))
+```
+
+As you can see, the share of significant results (recall, there is no effect of `X2`, so all these are type I errors!) is around 5% for the bootstrapped and robust standard errors, but higher for the ordinary standard errors when heteroscedasticity is present. There should not be a big difference when there is no heteroscedasticity.
+
+# By the end of this seminar, you should be able to…
+
+- Estimate multivariate linear regression models using `lm()`,
+
+- Retrieve and interpret the intercept, coefficients, standard errors, t-values, p-values, and confidence-intervals from the model output,
+
+- judge how well a model fits the data by interpretting the $R^2$, 
+
+- Use the `predict()` function to make predictions based on a fitted model,
+
+- Retrieve and interpret model diagnostics and residual plots
+
