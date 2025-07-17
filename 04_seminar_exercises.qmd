@@ -374,12 +374,14 @@ While we can fit regression lines to virtually all data, whether our point estim
 
 To recap the assumptions of linear regression:
 
-1.  Linearity: The relationship between the independent and dependent variables is linear (possibly after variable transformation). In other words: the relationship between the dependent variable and the independent variables is correctly specified.
-2.  Homoscedasticity/No heteroscedasticity: The variance of the residuals is constant across all levels of the independent variable.
-3.  Normality: The residuals are normally distributed.
-4.  Independence: The observations are independent of each other.
+1.  Linearity: The relationship between the independent and dependent variables is linear (possibly after variable transformation). In other words: The true relationship between Y and X is linear in the parameters
+2.  Independence/I.i.d random sample: The sample is a random draw.
+3. No multicollinearity: The independent variables are not perfectly correlated with each other.
+4. Zero conditional mean $E[\epsilon \mid X] = 0$: all the systematic components in the DGP are in our estimator.
+5.  Homoscedasticity/No heteroscedasticity: The variance of the error term is constant across all levels of the independent variable.
 
-By inspecting the residuals, we can learn something about assumptions 1, 2, and 3. You can access the residuals of a model using the `residuals()` function. Let's visualise the residuals of our previous `car_model` in the scatter plot we created earlier.
+
+By inspecting the residuals, we can learn something about assumptions 1 and 5. You can access the residuals of a model using the `residuals()` function. Let's visualise the residuals of our previous `car_model` in the scatter plot we created earlier.
 
 ```{r residuals}
 # get residuals
