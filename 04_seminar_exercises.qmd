@@ -93,16 +93,6 @@ Create a scatterplot with `wt` on the x-axis and `mpg` on the y-axis. Use the `g
 # your code goes here
 ```
 
-::: {.callout-info}
-If you are unsatisfied with how the plot is rendered (e.g. elements too small) you can install the `httpgd` package, which displays the plots much better. This is optional and if your plots are clearly displayed, just stick to the default and don't execute the code below.
-
-```{r httpgd, eval=FALSE}
-remotes::install_github("nx10/httpgd")
-```
-
-Then, navigate to the VSCode setting (Cmd + ,) and search for "httpgd". Check the box for the "Use Httpgd" setting. Then restart VScode.
-:::
-
 
 Ok, we can see that there is a negative relationship between car weight and miles per gallon. Just from looking at the scatterplot, what do you think are appropriate values for the intercept and the slope of the regression line? Try out a few variables and add them to the scatterplot by changing respective values the `geom_abline()` function below. 
 
